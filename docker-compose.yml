@@ -1,0 +1,114 @@
+// ===== DOCKER-COMPOSE.YML =====
+version: '3.8'
+
+services:
+  # MongoDB
+  mongodb:
+    image: mongo:7.0
+    container_name: web-os-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    networks:
+      - web-os-network
+
+  # Redis
+  redis:
+    image: redis:7.2-alpine
+    container_name: web-os-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - web-os-network
+
+  # Auth Service
+  auth-service:
+    build: .
+    container_name: web-os-auth
+    ports:
+      - "3001:3001"
+    depends_on:
+      - mongodb
+      - redis
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017/web-os?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-super-secret-jwt-key
+      - AUTH_PORT=3001
+    command: node auth-service/index.js
+    networks:
+      - web-os-network
+
+  # FS Service
+  fs-service:
+    build: .
+    container_name: web-os-fs
+    ports:
+      - "3002:3002"
+    depends_on:
+      - mongodb
+      - redis
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017/web-os?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - FS_PORT=3002
+    command: node fs-service/index.js
+    networks:
+      - web-os-network
+
+  # CLI Service
+  cli-service:
+    build: .
+    container_name: web-os-cli
+    ports:
+      - "3003:3003"
+    depends_on:
+      - redis
+      - fs-service
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - CLI_PORT=3003
+      - FS_PORT=3002
+    command: node cli-service/index.js
+    networks:
+      - web-os-network
+
+  # Gateway Service
+  gateway:
+    build: .
+    container_name: web-os-gateway
+    ports:
+      - "3000:3000"
+    depends_on:
+      - auth-service
+      - fs-service
+      - cli-service
+      - redis
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-super-secret-jwt-key
+      - GATEWAY_PORT=3000
+      - AUTH_PORT=3001
+      - FS_PORT=3002
+      - CLI_PORT=3003
+    command: node gateway/index.js
+    networks:
+      - web-os-network
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  web-os-network:
+    driver: bridge
