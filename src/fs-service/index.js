@@ -1,4 +1,3 @@
-
 // ===== FS-SERVICE/INDEX.JS =====
 const express = require('express');
 const mongoose = require('mongoose');
@@ -7,7 +6,7 @@ const helmet = require('helmet');
 const config = require('../config');
 const logger = require('../logger');
 const redisClient = require('../redis-client');
-const fsController = require('../controllers/fs');
+const fsController = require('./fs');
 
 const app = express();
 

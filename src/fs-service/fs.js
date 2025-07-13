@@ -1,6 +1,6 @@
-// ===== FS-SERVICE/CONTROLLERS/FS.JS =====
-const File = require('../../models/file');
-const logger = require('../../logger');
+// ===== FS-SERVICE/FS.JS =====
+const File = require('../models/file');
+const logger = require('../logger');
 const path = require('path');
 const fs = require('fs').promises;
 
