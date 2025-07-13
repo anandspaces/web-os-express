@@ -1,501 +1,241 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebOS Terminal</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Courier New', monospace;
-            background: #000;
-            color: #00ff00;
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-        }
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>WebOS Terminal</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			font-family: 'Courier New', monospace;
+			background: #000;
+			color: #00ff00;
+			height: 100vh;
+			overflow: hidden;
+			display: flex;
+		}
 
-        .container {
-            display: flex;
-            width: 100%;
-            height: 100vh;
-        }
-        
-        #terminal {
-            flex: 1;
-            height: 100vh;
-            padding: 20px;
-            box-sizing: border-box;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        
-        .input-line {
-            display: flex;
-            align-items: center;
-        }
-        
-        .prompt {
-            color: #00ff00;
-            margin-right: 10px;
-        }
-        
-        #command-input {
-            background: transparent;
-            border: none;
-            color: #00ff00;
-            font-family: inherit;
-            font-size: inherit;
-            flex: 1;
-            outline: none;
-        }
-        
-        .output {
-            margin: 5px 0;
-        }
-        
-        .error {
-            color: #ff6666;
-        }
-        
-        .cursor {
-            animation: blink 1s infinite;
-        }
-        
-        @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0; }
-        }
-        
-        .login-form {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #111;
-            padding: 30px;
-            border: 1px solid #333;
-            border-radius: 8px;
-            z-index: 1000;
-        }
-        
-        .login-form input {
-            display: block;
-            width: 100%;
-            margin: 10px 0;
-            padding: 10px;
-            background: #222;
-            border: 1px solid #333;
-            color: #00ff00;
-            font-family: inherit;
-        }
-        
-        .login-form button {
-            background: #333;
-            color: #00ff00;
-            border: 1px solid #555;
-            padding: 10px 20px;
-            margin: 5px;
-            cursor: pointer;
-            font-family: inherit;
-        }
-        
-        .login-form button:hover {
-            background: #555;
-        }
-        
-        .hidden {
-            display: none !important;
-        }
+		.container {
+			display: flex;
+			width: 100%;
+			height: 100vh;
+		}
 
-        #chat-panel {
-            width: 300px;
-            border-left: 1px solid #333;
-            display: flex;
-            flex-direction: column;
-            background: #111;
-        }
+		#terminal {
+			flex: 1;
+			height: 100vh;
+			padding: 20px;
+			box-sizing: border-box;
+			overflow-y: auto;
+			white-space: pre-wrap;
+			word-wrap: break-word;
+		}
 
-        #chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px;
-        }
+		.input-line {
+			display: flex;
+			align-items: center;
+		}
 
-        .chat-message {
-            margin: 5px 0;
-            padding: 5px;
-            border-radius: 4px;
-            word-wrap: break-word;
-        }
+		.prompt {
+			color: #00ff00;
+			margin-right: 10px;
+		}
 
-        .chat-message.system {
-            color: #888;
-            font-style: italic;
-        }
+		#command-input {
+			background: transparent;
+			border: none;
+			color: #00ff00;
+			font-family: inherit;
+			font-size: inherit;
+			flex: 1;
+			outline: none;
+		}
 
-        .chat-message .username {
-            color: #4CAF50;
-            font-weight: bold;
-        }
+		.output {
+			margin: 5px 0;
+		}
 
-        .chat-message .time {
-            color: #666;
-            font-size: 0.8em;
-        }
+		.error {
+			color: #ff6666;
+		}
 
-        #chat-input-container {
-            display: flex;
-            padding: 10px;
-            border-top: 1px solid #333;
-        }
+		.cursor {
+			animation: blink 1s infinite;
+		}
 
-        #chat-input {
-            flex: 1;
-            background: #222;
-            border: 1px solid #333;
-            color: #00ff00;
-            padding: 5px;
-            margin-right: 5px;
-            font-family: inherit;
-        }
+		@keyframes blink {
 
-        #chat-send {
-            background: #333;
-            color: #00ff00;
-            border: 1px solid #555;
-            padding: 5px 10px;
-            cursor: pointer;
-        }
+			0%,
+			50% {
+				opacity: 1;
+			}
 
-        #chat-send:hover {
-            background: #555;
-        }
+			51%,
+			100% {
+				opacity: 0;
+			}
+		}
 
-        #mode-toggle {
-            position: fixed;
-            top: 10px;
-            right: 320px;
-            background: #333;
-            color: #00ff00;
-            border: 1px solid #555;
-            padding: 5px 10px;
-            cursor: pointer;
-            z-index: 100;
-        }
+		.login-form {
+			position: fixed;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			background: #111;
+			padding: 30px;
+			border: 1px solid #333;
+			border-radius: 8px;
+			z-index: 1000;
+		}
 
-        #users-online {
-            padding: 10px;
-            border-bottom: 1px solid #333;
-            color: #888;
-        }
-    </style>
+		.login-form input {
+			display: block;
+			width: 100%;
+			margin: 10px 0;
+			padding: 10px;
+			background: #222;
+			border: 1px solid #333;
+			color: #00ff00;
+			font-family: inherit;
+		}
+
+		.login-form button {
+			background: #333;
+			color: #00ff00;
+			border: 1px solid #555;
+			padding: 10px 20px;
+			margin: 5px;
+			cursor: pointer;
+			font-family: inherit;
+		}
+
+		.login-form button:hover {
+			background: #555;
+		}
+
+		.hidden {
+			display: none !important;
+		}
+
+		#chat-panel {
+			width: 300px;
+			border-left: 1px solid #333;
+			display: flex;
+			flex-direction: column;
+			background: #111;
+		}
+
+		#chat-messages {
+			flex: 1;
+			overflow-y: auto;
+			padding: 10px;
+		}
+
+		.chat-message {
+			margin: 5px 0;
+			padding: 5px;
+			border-radius: 4px;
+			word-wrap: break-word;
+		}
+
+		.chat-message.system {
+			color: #888;
+			font-style: italic;
+		}
+
+		.chat-message .username {
+			color: #4CAF50;
+			font-weight: bold;
+		}
+
+		.chat-message .time {
+			color: #666;
+			font-size: 0.8em;
+		}
+
+		#chat-input-container {
+			display: flex;
+			padding: 10px;
+			border-top: 1px solid #333;
+		}
+
+		#chat-input {
+			flex: 1;
+			background: #222;
+			border: 1px solid #333;
+			color: #00ff00;
+			padding: 5px;
+			margin-right: 5px;
+			font-family: inherit;
+		}
+
+		#chat-send {
+			background: #333;
+			color: #00ff00;
+			border: 1px solid #555;
+			padding: 5px 10px;
+			cursor: pointer;
+		}
+
+		#chat-send:hover {
+			background: #555;
+		}
+
+		#mode-toggle {
+			position: fixed;
+			top: 10px;
+			right: 320px;
+			background: #333;
+			color: #00ff00;
+			border: 1px solid #555;
+			padding: 5px 10px;
+			cursor: pointer;
+			z-index: 100;
+		}
+
+		#users-online {
+			padding: 10px;
+			border-bottom: 1px solid #333;
+			color: #888;
+		}
+	</style>
 </head>
+
 <body>
-    <div id="login-form" class="login-form">
-        <h2>WebOS Login</h2>
-        <input type="text" id="username" placeholder="Username" />
-        <input type="password" id="password" placeholder="Password" />
-        <button onclick="login()">Login</button>
-        <button onclick="register()">Register</button>
-        <button onclick="anonymousLogin()">Anonymous Login</button>
-    </div>
-    
-    <div class="container hidden" id="main-container">
-        <button id="mode-toggle">Toggle Chat</button>
-        
-        <div id="terminal">
-            <div id="output"></div>
-            <div class="input-line">
-                <span class="prompt" id="prompt">user@webos:~$ </span>
-                <input type="text" id="command-input" autocomplete="off" />
-            </div>
-        </div>
+	<div id="login-form" class="login-form">
+		<h2>WebOS Login</h2>
+		<input type="text" id="username" placeholder="Username" />
+		<input type="password" id="password" placeholder="Password" />
+		<button onclick="login()">Login</button>
+		<button onclick="register()">Register</button>
+		<button onclick="anonymousLogin()">Anonymous Login</button>
+	</div>
 
-        <div id="chat-panel">
-            <div id="users-online">Users Online: 1</div>
-            <div id="chat-messages"></div>
-            <div id="chat-input-container">
-                <input type="text" id="chat-input" placeholder="Type a message..." />
-                <button id="chat-send">Send</button>
-            </div>
-        </div>
-    </div>
+	<div class="container hidden" id="main-container">
+		<button id="mode-toggle">Toggle Chat</button>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
-    <script>
-        let socket = null;
-        let currentUser = null;
-        let commandHistory = [];
-        let historyIndex = -1;
+		<div id="terminal">
+			<div id="output"></div>
+			<div class="input-line">
+				<span class="prompt" id="prompt">user@webos:~$ </span>
+				<input type="text" id="command-input" autocomplete="off" />
+			</div>
+		</div>
 
-        // Authentication functions
-        async function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            
-            try {
-                const response = await fetch('http://localhost:3001/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    currentUser = data.user;
-                    localStorage.setItem('webos-token', data.token);
-                    connectWebSocket(data.token);
-                } else {
-                    alert('Login failed: ' + data.error);
-                }
-            } catch (error) {
-                alert('Login error: ' + error.message);
-            }
-        }
+		<div id="chat-panel">
+			<div id="users-online">Users Online: 1</div>
+			<div id="chat-messages"></div>
+			<div id="chat-input-container">
+				<input type="text" id="chat-input" placeholder="Type a message..." />
+				<button id="chat-send">Send</button>
+			</div>
+		</div>
+	</div>
 
-        async function register() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            
-            if (!username || !password) {
-                alert('Please enter username and password');
-                return;
-            }
-            
-            try {
-                const response = await fetch('http://localhost:3001/api/auth/register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        username, 
-                        password, 
-                        email: `${username}@webos.com` 
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    currentUser = data.user;
-                    localStorage.setItem('webos-token', data.token);
-                    connectWebSocket(data.token);
-                } else {
-                    alert('Registration failed: ' + data.error);
-                }
-            } catch (error) {
-                alert('Registration error: ' + error.message);
-            }
-        }
-
-        async function anonymousLogin() {
-            try {
-                const response = await fetch('http://localhost:3001/api/auth/anonymous', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    currentUser = data.user;
-                    localStorage.setItem('webos-token', data.token);
-                    connectWebSocket(data.token);
-                } else {
-                    alert('Anonymous login failed: ' + data.error);
-                }
-            } catch (error) {
-                alert('Anonymous login error: ' + error.message);
-            }
-        }
-
-        function connectWebSocket(token) {
-            socket = io('http://localhost:3000', {
-                auth: { token }
-            });
-
-            socket.on('connect', () => {
-                console.log('Connected to WebSocket');
-                document.getElementById('login-form').classList.add('hidden');
-                document.getElementById('main-container').classList.remove('hidden');
-                document.getElementById('command-input').focus();
-                updatePrompt();
-                socket.emit('user_connected');
-            });
-
-            socket.on('output', (data) => {
-                if (data.output) {
-                    appendOutput(data.output);
-                }
-                if (data.error) {
-                    appendOutput(data.error, 'error');
-                }
-            });
-
-            socket.on('clear', () => {
-                document.getElementById('output').innerHTML = '';
-            });
-
-            socket.on('disconnect', () => {
-                console.log('Disconnected from WebSocket');
-                appendOutput('Connection lost. Please refresh the page.', 'error');
-            });
-
-            socket.on('connect_error', (error) => {
-                console.error('Connection error:', error);
-                alert('Connection failed. Please try again.');
-            });
-        }
-
-        function appendOutput(text, className = '') {
-            const outputDiv = document.getElementById('output');
-            const line = document.createElement('div');
-            line.className = `output ${className}`;
-            line.textContent = text;
-            outputDiv.appendChild(line);
-            
-            // Auto-scroll
-            document.getElementById('terminal').scrollTop = document.getElementById('terminal').scrollHeight;
-        }
-
-        function updatePrompt() {
-            const promptElement = document.getElementById('prompt');
-            if (currentUser) {
-                promptElement.textContent = `${currentUser.username}@webos:~$ `;
-            }
-        }
-
-        // Command input handling
-        document.getElementById('command-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const command = e.target.value.trim();
-                if (command && socket) {
-                    // Add to history
-                    commandHistory.push(command);
-                    historyIndex = commandHistory.length;
-                    
-                    // Show command in terminal
-                    appendOutput(`${document.getElementById('prompt').textContent}${command}`);
-                    
-                    // Send command
-                    socket.emit('command', { command });
-                    
-                    // Clear input
-                    e.target.value = '';
-                }
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (historyIndex > 0) {
-                    historyIndex--;
-                    e.target.value = commandHistory[historyIndex];
-                }
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (historyIndex < commandHistory.length - 1) {
-                    historyIndex++;
-                    e.target.value = commandHistory[historyIndex];
-                } else {
-                    historyIndex = commandHistory.length;
-                    e.target.value = '';
-                }
-            }
-        });
-
-        // Check for existing token on page load
-        window.addEventListener('load', () => {
-            const token = localStorage.getItem('webos-token');
-            if (token) {
-                fetch('http://localhost:3001/api/auth/verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.user) {
-                        currentUser = data.user;
-                        connectWebSocket(token);
-                    }
-                })
-                .catch(() => {
-                    localStorage.removeItem('webos-token');
-                });
-            }
-        });
-
-        // Chat functionality
-        document.getElementById('chat-send').addEventListener('click', sendChatMessage);
-        document.getElementById('chat-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendChatMessage();
-            }
-        });
-
-        function sendChatMessage() {
-            const input = document.getElementById('chat-input');
-            const message = input.value.trim();
-            
-            if (message && socket) {
-                socket.emit('chat_message', { message });
-                input.value = '';
-            }
-        }
-
-        // Mode toggle
-        document.getElementById('mode-toggle').addEventListener('click', () => {
-            const chatPanel = document.getElementById('chat-panel');
-            const terminal = document.getElementById('terminal');
-            
-            if (chatPanel.style.display === 'none') {
-                chatPanel.style.display = 'flex';
-                terminal.style.flex = '1';
-            } else {
-                chatPanel.style.display = 'none';
-                terminal.style.flex = '1';
-            }
-        });
-
-        // Chat message handling
-        socket.on('chat_message', (data) => {
-            const chatMessages = document.getElementById('chat-messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'chat-message';
-            
-            const time = new Date().toLocaleTimeString();
-            messageDiv.innerHTML = `
-                <span class="time">[${time}]</span>
-                <span class="username">${data.username}:</span>
-                ${data.message}
-            `;
-            
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        });
-
-        socket.on('system_message', (data) => {
-            const chatMessages = document.getElementById('chat-messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'chat-message system';
-            messageDiv.textContent = data.message;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        });
-
-        socket.on('users_update', (data) => {
-            document.getElementById('users-online').textContent = `Users Online: ${data.count}`;
-        });
-
-        // Keep chat input and command input from interfering
-        document.getElementById('chat-input').addEventListener('focus', () => {
-            document.getElementById('command-input').blur();
-        });
-
-        document.getElementById('command-input').addEventListener('focus', () => {
-            document.getElementById('chat-input').blur();
-        });
-    </script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+	<script src="./app.js"></script>
 </body>
+
 </html>
