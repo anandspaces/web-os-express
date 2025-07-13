@@ -1,4 +1,4 @@
-// ===== SHARED/LOGGER.JS =====
+// ===== LOGGER.JS =====
 const winston = require('winston');
 
 const logger = winston.createLogger({

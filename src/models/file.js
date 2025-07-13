@@ -1,4 +1,3 @@
-
 // ===== FS-SERVICE/MODELS/FILE.JS =====
 const mongoose = require('mongoose');
 
@@ -51,9 +50,16 @@ FileSchema.methods.getFullPath = function() {
   return this.path === '/' ? `/${this.name}` : `${this.path}/${this.name}`;
 };
 
-FileSchema.statics.sanitizePath = function(path) {
-  // Prevent path traversal attacks
-  return path.replace(/\.\./g, '').replace(/\/+/g, '/');
+FileSchema.statics.sanitizePath = function(inputPath) {
+  // Handle undefined or empty paths
+  if (!inputPath) return '/';
+  
+  // Prevent path traversal attacks and normalize slashes
+  return inputPath
+    .replace(/\.\./g, '')    // Remove parent directory references
+    .replace(/\/+/g, '/')    // Replace multiple slashes with single slash
+    .replace(/\/$/, '')      // Remove trailing slash
+    .replace(/^([^/])/, '/$1'); // Ensure path starts with slash
 };
 
 module.exports = mongoose.model('File', FileSchema);
