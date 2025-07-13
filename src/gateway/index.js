@@ -15,19 +15,11 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: ["http://localhost:8080", "http://127.0.0.1:8080"],
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
-
-// Serve static files from public directory - this should be before other middleware
-app.use('/', express.static(path.join(__dirname, '../../public')));
-
-// Default route to serve index.html
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../public/index.html'));
-});
-app.use(express.static(path.join(__dirname, '../../public')));
 
 // Rate limiter for WebSocket connections
 const wsRateLimiter = new RateLimiterMemory({
@@ -42,12 +34,15 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "cdnjs.cloudflare.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'", "ws:", "wss:", "http://localhost:3000", "http://localhost:3001"],
+      connectSrc: ["'self'", "ws:", "wss:", "http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003"],
       upgradeInsecureRequests: null
     }
   }
 }));
-app.use(cors());
+app.use(cors({
+  origin: ["http://localhost:8080", "http://127.0.0.1:8080"],
+  credentials: true
+}));
 app.use(express.json());
 
 // Connected clients
@@ -57,28 +52,28 @@ const connectedClients = new Map();
 io.use(async (socket, next) => {
   try {
     const token = socket.handshake.auth.token;
-    
+
     if (!token) {
       return next(new Error('Authentication error'));
     }
-    
+
     const decoded = jwt.verify(token, config.JWT_SECRET);
-    
+
     // Verify user exists
     const response = await fetch(`http://localhost:${config.SERVICES.AUTH_PORT}/api/auth/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token })
     });
-    
+
     if (!response.ok) {
       return next(new Error('Authentication failed'));
     }
-    
+
     const userData = await response.json();
     socket.user = userData.user;
     socket.sessionId = userData.user.sessionId;
-    
+
     next();
   } catch (error) {
     logger.error('WebSocket auth error:', error);
@@ -89,38 +84,38 @@ io.use(async (socket, next) => {
 // WebSocket connection handling
 io.on('connection', (socket) => {
   const { user, sessionId } = socket;
-  
+
   logger.info(`User connected: ${user.username} (${sessionId})`);
-  
+
   // Store client connection
   connectedClients.set(sessionId, {
     socket,
     user,
     connectedAt: new Date()
   });
-  
+
   // Send welcome message
   socket.emit('output', {
     output: `Welcome to WebOS, ${user.username}!\nType 'help' for available commands.\n`,
     error: null
   });
-  
+
   // Handle command execution
   socket.on('command', async (data) => {
     try {
       // Rate limiting
       await wsRateLimiter.consume(sessionId);
-      
+
       const { command } = data;
-      
+
       if (!command || typeof command !== 'string') {
         socket.emit('output', { output: '', error: 'Invalid command format' });
         return;
       }
-      
+
       // Log command
       logger.info(`Command from ${user.username}: ${command}`);
-      
+
       // Execute command via CLI service
       const response = await fetch(`http://localhost:${config.SERVICES.CLI_PORT}/api/cli/execute`, {
         method: 'POST',
@@ -132,38 +127,38 @@ io.on('connection', (socket) => {
           username: user.username
         })
       });
-      
+
       const result = await response.json();
-      
+
       // Send result back to client
       socket.emit('output', result);
-      
+
       // Handle special commands
       if (command.trim() === 'clear') {
         socket.emit('clear');
       }
-      
+
     } catch (error) {
       if (error.remainingPoints !== undefined) {
-        socket.emit('output', { 
-          output: '', 
-          error: 'Rate limit exceeded. Please slow down.' 
+        socket.emit('output', {
+          output: '',
+          error: 'Rate limit exceeded. Please slow down.'
         });
       } else {
         logger.error('Command execution error:', error);
-        socket.emit('output', { 
-          output: '', 
-          error: 'Internal server error' 
+        socket.emit('output', {
+          output: '',
+          error: 'Internal server error'
         });
       }
     }
   });
-  
+
   // Handle ping
   socket.on('ping', () => {
     socket.emit('pong', { timestamp: Date.now() });
   });
-  
+
   // Handle disconnect
   socket.on('disconnect', () => {
     logger.info(`User disconnected: ${user.username} (${sessionId})`);
@@ -201,22 +196,22 @@ app.use((err, req, res, next) => {
 // Redis connection and message handling
 redisClient.connect().then(() => {
   logger.info('Gateway connected to Redis');
-  
+
   // Subscribe to CLI responses
   redisClient.subscribe('cli-responses', (message) => {
     const { sessionId, result } = message;
     const client = connectedClients.get(sessionId);
-    
+
     if (client) {
       client.socket.emit('output', result);
     }
   });
-  
+
   // Subscribe to FS responses
   redisClient.subscribe('fs-responses', (message) => {
     const { sessionId, success, result, error } = message;
     const client = connectedClients.get(sessionId);
-    
+
     if (client) {
       if (success) {
         client.socket.emit('fs-result', { result });
