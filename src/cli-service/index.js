@@ -1,4 +1,3 @@
-
 // ===== CLI-SERVICE/INDEX.JS =====
 const express = require('express');
 const cors = require('cors');
@@ -6,7 +5,7 @@ const helmet = require('helmet');
 const config = require('../config');
 const logger = require('../logger');
 const redisClient = require('../redis-client');
-const CommandRouter = require('./command-router');
+const CommandRouter = require('./command');
 
 const app = express();
 const commandRouter = new CommandRouter();
