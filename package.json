@@ -1,15 +1,15 @@
 {
   "name": "web-os",
   "version": "1.0.0",
-  "main": "gateway/index.js",
+  "main": "src/gateway/index.js",
   "scripts": {
-    "start": "node gateway/index.js",
-    "dev": "nodemon gateway/index.js",
+    "start": "node src/gateway/index.js",
+    "dev": "nodemon src/gateway/index.js",
     "start:services": "concurrently \"npm run start:auth\" \"npm run start:fs\" \"npm run start:cli\" \"npm run start:gateway\"",
-    "start:auth": "node auth-service/index.js",
-    "start:fs": "node fs-service/index.js",
-    "start:cli": "node cli-service/index.js",
-    "start:gateway": "node gateway/index.js"
+    "start:auth": "node src/auth-services/index.js",
+    "start:fs": "node src/fs-service/index.js",
+    "start:cli": "node src/cli-service/index.js",
+    "start:gateway": "node src/gateway/index.js"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +24,7 @@
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.2",
+    "node-fetch": "^3.3.2",
     "rate-limiter-flexible": "^7.1.1",
     "redis": "^5.6.0",
     "socket.io": "^4.8.1",
