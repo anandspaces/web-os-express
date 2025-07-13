@@ -1,13 +1,3 @@
-
-
-
-
-
-
-
-
-
-# ===== CLIENT EXAMPLE (HTML) =====
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -23,10 +13,17 @@
             color: #00ff00;
             height: 100vh;
             overflow: hidden;
+            display: flex;
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
         }
         
         #terminal {
-            width: 100%;
+            flex: 1;
             height: 100vh;
             padding: 20px;
             box-sizing: border-box;
@@ -110,7 +107,89 @@
         }
         
         .hidden {
-            display: none;
+            display: none !important;
+        }
+
+        #chat-panel {
+            width: 300px;
+            border-left: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            background: #111;
+        }
+
+        #chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .chat-message {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 4px;
+            word-wrap: break-word;
+        }
+
+        .chat-message.system {
+            color: #888;
+            font-style: italic;
+        }
+
+        .chat-message .username {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .chat-message .time {
+            color: #666;
+            font-size: 0.8em;
+        }
+
+        #chat-input-container {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #333;
+        }
+
+        #chat-input {
+            flex: 1;
+            background: #222;
+            border: 1px solid #333;
+            color: #00ff00;
+            padding: 5px;
+            margin-right: 5px;
+            font-family: inherit;
+        }
+
+        #chat-send {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+
+        #chat-send:hover {
+            background: #555;
+        }
+
+        #mode-toggle {
+            position: fixed;
+            top: 10px;
+            right: 320px;
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 5px 10px;
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        #users-online {
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            color: #888;
         }
     </style>
 </head>
@@ -124,11 +203,24 @@
         <button onclick="anonymousLogin()">Anonymous Login</button>
     </div>
     
-    <div id="terminal" class="hidden">
-        <div id="output"></div>
-        <div class="input-line">
-            <span class="prompt" id="prompt">user@webos:~$ </span>
-            <input type="text" id="command-input" autocomplete="off" />
+    <div class="container hidden" id="main-container">
+        <button id="mode-toggle">Toggle Chat</button>
+        
+        <div id="terminal">
+            <div id="output"></div>
+            <div class="input-line">
+                <span class="prompt" id="prompt">user@webos:~$ </span>
+                <input type="text" id="command-input" autocomplete="off" />
+            </div>
+        </div>
+
+        <div id="chat-panel">
+            <div id="users-online">Users Online: 1</div>
+            <div id="chat-messages"></div>
+            <div id="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Type a message..." />
+                <button id="chat-send">Send</button>
+            </div>
         </div>
     </div>
 
@@ -228,9 +320,10 @@
             socket.on('connect', () => {
                 console.log('Connected to WebSocket');
                 document.getElementById('login-form').classList.add('hidden');
-                document.getElementById('terminal').classList.remove('hidden');
+                document.getElementById('main-container').classList.remove('hidden');
                 document.getElementById('command-input').focus();
                 updatePrompt();
+                socket.emit('user_connected');
             });
 
             socket.on('output', (data) => {
@@ -331,6 +424,77 @@
                     localStorage.removeItem('webos-token');
                 });
             }
+        });
+
+        // Chat functionality
+        document.getElementById('chat-send').addEventListener('click', sendChatMessage);
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+
+        function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            
+            if (message && socket) {
+                socket.emit('chat_message', { message });
+                input.value = '';
+            }
+        }
+
+        // Mode toggle
+        document.getElementById('mode-toggle').addEventListener('click', () => {
+            const chatPanel = document.getElementById('chat-panel');
+            const terminal = document.getElementById('terminal');
+            
+            if (chatPanel.style.display === 'none') {
+                chatPanel.style.display = 'flex';
+                terminal.style.flex = '1';
+            } else {
+                chatPanel.style.display = 'none';
+                terminal.style.flex = '1';
+            }
+        });
+
+        // Chat message handling
+        socket.on('chat_message', (data) => {
+            const chatMessages = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            
+            const time = new Date().toLocaleTimeString();
+            messageDiv.innerHTML = `
+                <span class="time">[${time}]</span>
+                <span class="username">${data.username}:</span>
+                ${data.message}
+            `;
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+
+        socket.on('system_message', (data) => {
+            const chatMessages = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message system';
+            messageDiv.textContent = data.message;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+
+        socket.on('users_update', (data) => {
+            document.getElementById('users-online').textContent = `Users Online: ${data.count}`;
+        });
+
+        // Keep chat input and command input from interfering
+        document.getElementById('chat-input').addEventListener('focus', () => {
+            document.getElementById('command-input').blur();
+        });
+
+        document.getElementById('command-input').addEventListener('focus', () => {
+            document.getElementById('chat-input').blur();
         });
     </script>
 </body>
