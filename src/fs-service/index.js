@@ -17,10 +17,7 @@ app.use(cors());
 app.use(express.json());
 
 // Connect to MongoDB
-mongoose.connect(config.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
+mongoose.connect(config.MONGODB_URI);
 
 mongoose.connection.on('connected', () => {
   logger.info('FS Service connected to MongoDB');
@@ -28,6 +25,12 @@ mongoose.connection.on('connected', () => {
 
 mongoose.connection.on('error', (err) => {
   logger.error('MongoDB connection error:', err);
+});
+
+// Start the server
+const PORT = config.SERVICES.FS_PORT;
+app.listen(PORT, () => {
+  logger.info(`FS Service running on port ${PORT}`);
 });
 
 // Routes
