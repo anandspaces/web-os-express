@@ -1,7 +1,7 @@
 
 // ===== SHARED/REDIS-CLIENT.JS =====
 const redis = require('redis');
-const config = require('./src/config');
+const config = require('./config');
 const logger = require('./logger');
 
 class RedisClient {
