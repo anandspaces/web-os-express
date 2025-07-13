@@ -1,4 +1,3 @@
-
 // ===== GATEWAY/INDEX.JS =====
 const express = require('express');
 const http = require('http');
@@ -6,6 +5,7 @@ const socketIo = require('socket.io');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const helmet = require('helmet');
+const path = require('path');
 const { RateLimiterMemory } = require('rate-limiter-flexible');
 const config = require('../config');
 const logger = require('../logger');
@@ -20,6 +20,15 @@ const io = socketIo(server, {
   }
 });
 
+// Serve static files from public directory - this should be before other middleware
+app.use('/', express.static(path.join(__dirname, '../../public')));
+
+// Default route to serve index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../public/index.html'));
+});
+app.use(express.static(path.join(__dirname, '../../public')));
+
 // Rate limiter for WebSocket connections
 const wsRateLimiter = new RateLimiterMemory({
   points: config.RATE_LIMIT.WEBSOCKET_POINTS,
@@ -27,7 +36,17 @@ const wsRateLimiter = new RateLimiterMemory({
 });
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "cdnjs.cloudflare.com"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", "ws:", "wss:", "http://localhost:3000", "http://localhost:3001"],
+      upgradeInsecureRequests: null
+    }
+  }
+}));
 app.use(cors());
 app.use(express.json());
 
