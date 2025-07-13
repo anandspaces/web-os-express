@@ -1,4 +1,3 @@
-
 // ===== AUTH-SERVICE/INDEX.JS =====
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -7,9 +6,11 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
 const config = require('../config');
 const logger = require('../logger');
 const redisClient = require('../redis-client');
+const User = require('../models/user');
 
 const app = express();
 
@@ -20,6 +21,14 @@ app.use(express.json());
 
 // Connect to MongoDB
 mongoose.connect(config.MONGODB_URI);
+
+mongoose.connection.on('connected', () => {
+  logger.info('Auth Service connected to MongoDB');
+});
+
+mongoose.connection.on('error', (err) => {
+  logger.error('MongoDB connection error:', err);
+});
 
 // Routes
 app.post('/api/auth/register', async (req, res) => {
@@ -34,13 +43,12 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
     
-    const hashedPassword = await bcrypt.hash(password, 10);
     const sessionId = uuidv4();
     
     const user = await User.create({
       username,
       email,
-      password: hashedPassword,
+      password,
       sessionId
     });
     
@@ -51,11 +59,14 @@ app.post('/api/auth/register', async (req, res) => {
     );
     
     // Initialize user file system
-    await fetch(`http://localhost:${config.SERVICES.FS_PORT}/api/fs/init`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user._id.toString() })
-    });
+    try {
+      await axios.post(`http://localhost:${config.SERVICES.FS_PORT}/api/fs/init`, 
+        { userId: user._id.toString() },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    } catch (fsError) {
+      logger.warn('Failed to initialize filesystem, but user was created:', fsError);
+    }
     
     res.json({
       token,
@@ -127,11 +138,14 @@ app.post('/api/auth/anonymous', async (req, res) => {
     );
     
     // Initialize user file system
-    await fetch(`http://localhost:${config.SERVICES.FS_PORT}/api/fs/init`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user._id.toString() })
-    });
+    try {
+      await axios.post(`http://localhost:${config.SERVICES.FS_PORT}/api/fs/init`, 
+        { userId: user._id.toString() },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    } catch (fsError) {
+      logger.warn('Failed to initialize filesystem for anonymous user:', fsError);
+    }
     
     res.json({
       token,
