@@ -1,9 +1,24 @@
-
 // ===== FS-SERVICE/CONTROLLERS/FS.JS =====
-const File = require('../models/file');
+const File = require('../../models/file');
 const logger = require('../../logger');
+const path = require('path');
+const fs = require('fs').promises;
 
 class FileSystemController {
+  constructor() {
+    this.uploadsDir = path.join(process.cwd(), 'uploads');
+    this.ensureUploadsDir();
+  }
+
+  async ensureUploadsDir() {
+    try {
+      await fs.access(this.uploadsDir);
+    } catch {
+      await fs.mkdir(this.uploadsDir, { recursive: true });
+      logger.info(`Created uploads directory at ${this.uploadsDir}`);
+    }
+  }
+
   async initializeUserFS(userId) {
     try {
       // Create home directory if it doesn't exist
@@ -85,14 +100,23 @@ class FileSystemController {
         throw new Error(`${type} '${name}' already exists`);
       }
 
+      // Create user directory if it doesn't exist
+      const userUploadDir = path.join(this.uploadsDir, userId.toString());
+      await fs.mkdir(userUploadDir, { recursive: true });
+
       const file = await File.create({
         name,
         type,
-        content,
         path: sanitizedPath,
         owner: userId,
         size: content.length
       });
+
+      // If it's a file, save content to disk
+      if (type === 'file' && content) {
+        const filePath = path.join(userUploadDir, file._id.toString());
+        await fs.writeFile(filePath, content);
+      }
 
       logger.info(`Created ${type}: ${sanitizedPath}/${name} for user: ${userId}`);
       return file;
@@ -116,7 +140,15 @@ class FileSystemController {
         throw new Error(`File '${name}' not found`);
       }
 
-      return file.content;
+      // Read file from disk
+      const filePath = path.join(this.uploadsDir, userId.toString(), file._id.toString());
+      try {
+        const content = await fs.readFile(filePath, 'utf8');
+        return content;
+      } catch (error) {
+        logger.warn(`File not found on disk: ${error.message}`);
+        return ''; // Return empty string if file doesn't exist on disk
+      }
     } catch (error) {
       logger.error('Error reading file:', error);
       throw error;
@@ -126,24 +158,25 @@ class FileSystemController {
   async writeFile(userId, path, name, content) {
     try {
       const sanitizedPath = File.sanitizePath(path);
-      const file = await File.findOneAndUpdate(
-        {
-          name,
-          path: sanitizedPath,
-          owner: userId,
-          type: 'file'
-        },
-        {
-          content,
-          size: content.length,
-          updatedAt: new Date()
-        },
-        { new: true }
-      );
+      const file = await File.findOne({
+        name,
+        path: sanitizedPath,
+        owner: userId,
+        type: 'file'
+      });
 
       if (!file) {
         throw new Error(`File '${name}' not found`);
       }
+
+      // Write to disk
+      const filePath = path.join(this.uploadsDir, userId.toString(), file._id.toString());
+      await fs.writeFile(filePath, content);
+
+      // Update metadata
+      file.size = content.length;
+      file.updatedAt = new Date();
+      await file.save();
 
       return file;
     } catch (error) {
@@ -155,7 +188,7 @@ class FileSystemController {
   async deleteFile(userId, path, name) {
     try {
       const sanitizedPath = File.sanitizePath(path);
-      const file = await File.findOneAndDelete({
+      const file = await File.findOne({
         name,
         path: sanitizedPath,
         owner: userId
@@ -165,12 +198,45 @@ class FileSystemController {
         throw new Error(`File or folder '${name}' not found`);
       }
 
+      // Delete physical file if it's a file
+      if (file.type === 'file') {
+        const filePath = path.join(this.uploadsDir, userId.toString(), file._id.toString());
+        try {
+          await fs.unlink(filePath);
+        } catch (error) {
+          logger.warn(`Could not delete physical file: ${error.message}`);
+        }
+      }
+
+      // Delete from database
+      await file.deleteOne();
+
       // If it's a folder, recursively delete contents
       if (file.type === 'folder') {
-        const fullPath = file.getFullPath();
+        const fullPath = `${sanitizedPath}/${name}`.replace(/\/+/g, '/');
+        
+        // Find all files in this folder
+        const children = await File.find({
+          owner: userId,
+          path: new RegExp(`^${fullPath}/`)
+        });
+
+        // Delete physical files
+        for (const child of children) {
+          if (child.type === 'file') {
+            const childPath = path.join(this.uploadsDir, userId.toString(), child._id.toString());
+            try {
+              await fs.unlink(childPath);
+            } catch (error) {
+              logger.warn(`Could not delete physical file: ${error.message}`);
+            }
+          }
+        }
+
+        // Delete from database
         await File.deleteMany({
-          path: new RegExp(`^${fullPath}`),
-          owner: userId
+          owner: userId,
+          path: new RegExp(`^${fullPath}/`)
         });
       }
 

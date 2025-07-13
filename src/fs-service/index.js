@@ -7,7 +7,7 @@ const helmet = require('helmet');
 const config = require('../config');
 const logger = require('../logger');
 const redisClient = require('../redis-client');
-const fsController = require('../controller/fs');
+const fsController = require('../controllers/fs');
 
 const app = express();
 
