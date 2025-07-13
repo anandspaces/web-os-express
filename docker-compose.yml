@@ -1,8 +1,4 @@
-// ===== DOCKER-COMPOSE.YML =====
-version: '3.8'
-
 services:
-  # MongoDB
   mongodb:
     image: mongo:7.0
     container_name: web-os-mongodb
@@ -16,7 +12,6 @@ services:
     networks:
       - web-os-network
 
-  # Redis
   redis:
     image: redis:7.2-alpine
     container_name: web-os-redis
@@ -27,7 +22,6 @@ services:
     networks:
       - web-os-network
 
-  # Auth Service
   auth-service:
     build: .
     container_name: web-os-auth
@@ -46,7 +40,6 @@ services:
     networks:
       - web-os-network
 
-  # FS Service
   fs-service:
     build: .
     container_name: web-os-fs
@@ -64,7 +57,6 @@ services:
     networks:
       - web-os-network
 
-  # CLI Service
   cli-service:
     build: .
     container_name: web-os-cli
@@ -82,7 +74,6 @@ services:
     networks:
       - web-os-network
 
-  # Gateway Service
   gateway:
     build: .
     container_name: web-os-gateway
