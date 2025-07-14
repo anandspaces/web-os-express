@@ -19,8 +19,22 @@ class FileSystemController {
     }
   }
 
+  async ensureUserDir(userId) {
+    const userDir = path.join(this.uploadsDir, userId.toString());
+    try {
+      await fs.access(userDir);
+    } catch {
+      await fs.mkdir(userDir, { recursive: true });
+      logger.info(`Created user directory at ${userDir}`);
+    }
+    return userDir;
+  }
+
   async initializeUserFS(userId) {
     try {
+      // Ensure user uploads directory exists
+      await this.ensureUserDir(userId);
+
       // Create home directory if it doesn't exist
       const homeExists = await File.findOne({
         name: 'home',
@@ -30,14 +44,6 @@ class FileSystemController {
       });
 
       if (!homeExists) {
-        // Create root directory
-        await File.create({
-          name: 'root',
-          type: 'folder',
-          path: '/',
-          owner: userId
-        });
-
         // Create home directory
         const homeDir = await File.create({
           name: 'home',
@@ -63,9 +69,9 @@ class FileSystemController {
     }
   }
 
-  async listDirectory(userId, path = '/home/user') {
+  async listDirectory(userId, dirPath = '/home/user') {
     try {
-      const sanitizedPath = File.sanitizePath(path);
+      const sanitizedPath = File.sanitizePath(dirPath);
       const files = await File.find({
         path: sanitizedPath,
         owner: userId
@@ -85,9 +91,9 @@ class FileSystemController {
     }
   }
 
-  async createFile(userId, path, name, type = 'file', content = '') {
+  async createFile(userId, dirPath, name, type = 'file', content = '') {
     try {
-      const sanitizedPath = File.sanitizePath(path);
+      const sanitizedPath = File.sanitizePath(dirPath);
       
       // Check if file already exists
       const existing = await File.findOne({
@@ -100,22 +106,22 @@ class FileSystemController {
         throw new Error(`${type} '${name}' already exists`);
       }
 
-      // Create user directory if it doesn't exist
-      const userUploadDir = path.join(this.uploadsDir, userId.toString());
-      await fs.mkdir(userUploadDir, { recursive: true });
+      // Ensure user directory exists
+      const userUploadDir = await this.ensureUserDir(userId);
 
       const file = await File.create({
         name,
         type,
         path: sanitizedPath,
         owner: userId,
-        size: content.length
+        size: content ? content.length : 0
       });
 
       // If it's a file, save content to disk
-      if (type === 'file' && content) {
-        const filePath = path.join(userUploadDir, file._id.toString());
-        await fs.writeFile(filePath, content);
+      if (type === 'file') {
+        const physicalPath = path.join(userUploadDir, file._id.toString());
+        await fs.writeFile(physicalPath, content || '', 'utf8');
+        logger.info(`Created physical file: ${physicalPath}`);
       }
 
       logger.info(`Created ${type}: ${sanitizedPath}/${name} for user: ${userId}`);
@@ -126,9 +132,9 @@ class FileSystemController {
     }
   }
 
-  async readFile(userId, path, name) {
+  async readFile(userId, dirPath, name) {
     try {
-      const sanitizedPath = File.sanitizePath(path);
+      const sanitizedPath = File.sanitizePath(dirPath);
       const file = await File.findOne({
         name,
         path: sanitizedPath,
@@ -141,13 +147,17 @@ class FileSystemController {
       }
 
       // Read file from disk
-      const filePath = path.join(this.uploadsDir, userId.toString(), file._id.toString());
+      const userUploadDir = await this.ensureUserDir(userId);
+      const physicalPath = path.join(userUploadDir, file._id.toString());
+      
       try {
-        const content = await fs.readFile(filePath, 'utf8');
+        const content = await fs.readFile(physicalPath, 'utf8');
         return content;
       } catch (error) {
         logger.warn(`File not found on disk: ${error.message}`);
-        return ''; // Return empty string if file doesn't exist on disk
+        // Try to recreate the file with empty content
+        await fs.writeFile(physicalPath, '', 'utf8');
+        return '';
       }
     } catch (error) {
       logger.error('Error reading file:', error);
@@ -155,29 +165,34 @@ class FileSystemController {
     }
   }
 
-  async writeFile(userId, path, name, content) {
+  async writeFile(userId, dirPath, name, content) {
     try {
-      const sanitizedPath = File.sanitizePath(path);
-      const file = await File.findOne({
+      const sanitizedPath = File.sanitizePath(dirPath);
+      let file = await File.findOne({
         name,
         path: sanitizedPath,
         owner: userId,
         type: 'file'
       });
 
+      // If file doesn't exist, create it
       if (!file) {
-        throw new Error(`File '${name}' not found`);
+        return await this.createFile(userId, dirPath, name, 'file', content);
       }
 
+      // Ensure user directory exists
+      const userUploadDir = await this.ensureUserDir(userId);
+
       // Write to disk
-      const filePath = path.join(this.uploadsDir, userId.toString(), file._id.toString());
-      await fs.writeFile(filePath, content);
+      const physicalPath = path.join(userUploadDir, file._id.toString());
+      await fs.writeFile(physicalPath, content || '', 'utf8');
 
       // Update metadata
-      file.size = content.length;
+      file.size = content ? content.length : 0;
       file.updatedAt = new Date();
       await file.save();
 
+      logger.info(`Updated file: ${sanitizedPath}/${name} for user: ${userId}`);
       return file;
     } catch (error) {
       logger.error('Error writing file:', error);
@@ -185,24 +200,38 @@ class FileSystemController {
     }
   }
 
-  async deleteFile(userId, path, name) {
+  async deleteFile(userId, dirPath, name, type = null) {
     try {
-      const sanitizedPath = File.sanitizePath(path);
-      const file = await File.findOne({
+      if (!name) {
+        throw new Error('Name is required');
+      }
+
+      const sanitizedPath = File.sanitizePath(dirPath);
+      const query = {
         name,
         path: sanitizedPath,
         owner: userId
-      });
+      };
+
+      if (type) {
+        query.type = type;
+      }
+
+      const file = await File.findOne(query);
 
       if (!file) {
         throw new Error(`File or folder '${name}' not found`);
       }
 
+      // Ensure user directory exists
+      const userUploadDir = await this.ensureUserDir(userId);
+
       // Delete physical file if it's a file
       if (file.type === 'file') {
-        const filePath = path.join(this.uploadsDir, userId.toString(), file._id.toString());
+        const filePath = path.join(userUploadDir, file._id.toString());
         try {
           await fs.unlink(filePath);
+          logger.info(`Deleted physical file: ${filePath}`);
         } catch (error) {
           logger.warn(`Could not delete physical file: ${error.message}`);
         }
@@ -215,20 +244,21 @@ class FileSystemController {
       if (file.type === 'folder') {
         const fullPath = `${sanitizedPath}/${name}`.replace(/\/+/g, '/');
         
-        // Find all files in this folder
+        // Find all files in this folder and subdirectories
         const children = await File.find({
           owner: userId,
-          path: new RegExp(`^${fullPath}/`)
+          path: new RegExp(`^${fullPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(/.*)?$`)
         });
 
         // Delete physical files
         for (const child of children) {
           if (child.type === 'file') {
-            const childPath = path.join(this.uploadsDir, userId.toString(), child._id.toString());
+            const childPath = path.join(userUploadDir, child._id.toString());
             try {
               await fs.unlink(childPath);
+              logger.info(`Deleted physical child file: ${childPath}`);
             } catch (error) {
-              logger.warn(`Could not delete physical file: ${error.message}`);
+              logger.warn(`Could not delete physical child file: ${error.message}`);
             }
           }
         }
@@ -236,7 +266,7 @@ class FileSystemController {
         // Delete from database
         await File.deleteMany({
           owner: userId,
-          path: new RegExp(`^${fullPath}/`)
+          path: new RegExp(`^${fullPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(/.*)?$`)
         });
       }
 
@@ -248,12 +278,14 @@ class FileSystemController {
     }
   }
 
-  async pathExists(userId, path) {
+  async pathExists(userId, inputPath) {
     try {
-      const sanitizedPath = File.sanitizePath(path);
-      const pathParts = sanitizedPath.split('/').filter(part => part);
+      const sanitizedPath = File.sanitizePath(inputPath);
       
-      if (pathParts.length === 0) return true; // Root path
+      // Root path always exists
+      if (sanitizedPath === '/' || sanitizedPath === '') return true;
+      
+      const pathParts = sanitizedPath.split('/').filter(part => part);
       
       let currentPath = '/';
       for (const part of pathParts) {
@@ -272,6 +304,34 @@ class FileSystemController {
     } catch (error) {
       logger.error('Error checking path existence:', error);
       return false;
+    }
+  }
+
+  async getFileInfo(userId, dirPath, name) {
+    try {
+      const sanitizedPath = File.sanitizePath(dirPath);
+      const file = await File.findOne({
+        name,
+        path: sanitizedPath,
+        owner: userId
+      });
+
+      if (!file) {
+        throw new Error(`File '${name}' not found`);
+      }
+
+      return {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        permissions: file.permissions,
+        createdAt: file.createdAt,
+        updatedAt: file.updatedAt,
+        path: file.path
+      };
+    } catch (error) {
+      logger.error('Error getting file info:', error);
+      throw error;
     }
   }
 }
