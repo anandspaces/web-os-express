@@ -25,6 +25,50 @@ mongoose.connection.on('connected', () => {
 mongoose.connection.on('error', (err) => {
   logger.error('MongoDB connection error:', err);
 });
+// Redis message handling
+redisClient.connect().then(() => {
+  redisClient.subscribe('fs-commands', async (message) => {
+    const { command, data, sessionId } = message;
+    
+    try {
+      let result;
+      switch (command) {
+        case 'ls':
+          result = await fsController.listDirectory(data.userId, data.path);
+          break;
+        case 'mkdir':
+          result = await fsController.createFile(data.userId, data.path, data.name, 'folder');
+          break;
+        case 'touch':
+          result = await fsController.createFile(data.userId, data.path, data.name, 'file');
+          break;
+        case 'cat':
+          result = await fsController.readFile(data.userId, data.path, data.name);
+          break;
+        case 'rm':
+          result = await fsController.deleteFile(data.userId, data.path, data.name);
+          break;
+        case 'pathExists':
+          result = await fsController.pathExists(data.userId, data.path);
+          break;
+        default:
+          throw new Error(`Unknown command: ${command}`);
+      }
+      
+      await redisClient.publish('fs-responses', {
+        sessionId,
+        success: true,
+        result
+      });
+    } catch (error) {
+      await redisClient.publish('fs-responses', {
+        sessionId,
+        success: false,
+        error: error.message
+      });
+    }
+  });
+});
 
 // Start the server
 const PORT = config.SERVICES.FS_PORT;
@@ -85,8 +129,8 @@ app.put('/api/fs/write', async (req, res) => {
 
 app.delete('/api/fs/delete', async (req, res) => {
   try {
-    const { userId, path, name } = req.query;
-    await fsController.deleteFile(userId, path, name);
+    const { userId, path, name, type } = req.body;  // ✅ Read from req.body
+    await fsController.deleteFile(userId, path, name, type);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
