@@ -1,5 +1,3 @@
-
-# ===== README.MD =====
 # WebOS Backend - Production-Grade Web-Based Operating System
 
 A scalable, production-ready backend for a browser-based operating system with terminal interface, built using Node.js, Express, MongoDB, WebSockets, and microservices architecture.
